@@ -1,0 +1,9 @@
+*.elf
+*.o
+*.iso
+*.d
+*.sym
+include/irq.h
+include/config.h
+tags
+cscope.*
