@@ -2,6 +2,8 @@
 
 An operating system just for fun.
 
+![screenshot](/doc/screenshot.png?raw=true)
+
 ## Features
 
 * Priority based scheduling, and there are 32 priorities.
