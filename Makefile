@@ -69,11 +69,11 @@ kernel/idt.d: include/irq.h
 		sed -e 's;^\(.*\)\.o\(.*\);$(@D)/\1.o $(@D)/\1.d\2;' > $@
 
 include/config.h: Config.mk
-	$(file >$@,/* DO NOT EDIT IT */)
-	$(file >>$@,#ifndef CONFIG_H)
-	$(file >>$@,#define CONFIG_H)
-	$(foreach cfg,$(filter CONFIG_%,${.VARIABLES}),$(file >>$@,#define $(cfg) $($(cfg))))
-	$(file >>$@,#endif  /* CONFIG_H */)
+	$(shell echo "/* DO NOT EDIT IT */" >$@)
+	$(shell echo "#ifndef CONFIG_H" >>$@)
+	$(shell echo "#define CONFIG_H" >>$@)
+	$(foreach cfg,$(filter CONFIG_%,${.VARIABLES}),$(shell echo '#define $(cfg) $($(cfg))' >>$@))
+	$(shell echo "#endif  /* CONFIG_H */" >>$@)
 
 -include $(DEPS)
 
