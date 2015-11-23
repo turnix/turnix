@@ -9,6 +9,7 @@ AS := as
 NM := nm
 OBJDUMP := objdump
 READELF := readelf
+QEMU := qemu-system-i386
 GDB := gdb
 SHELL := /bin/bash
 export SHELLOPTS := errexit:pipefail
@@ -74,13 +75,13 @@ include/config.h: Config.mk
 -include $(DEPS)
 
 qemu:
-	qemu-system-i386 -m 16M -kernel iso/boot/${KERNEL}.elf
+	$(QEMU) -m 16M -kernel iso/boot/${KERNEL}.elf
 
 dump:
 	$(OBJDUMP) -d iso/boot/${KERNEL}.elf | less
 
 gdb:
-	qemu-system-i386 -s -S -kernel iso/boot/${KERNEL}.elf &
+	$(QEMU) -s -S -kernel iso/boot/${KERNEL}.elf &
 	$(GDB) iso/boot/${KERNEL}.elf -ex 'target remote 127.0.0.1:1234'
 
 ${KERNEL}.iso: iso/boot/${KERNEL}.elf iso/boot/${KERNEL}.sym
