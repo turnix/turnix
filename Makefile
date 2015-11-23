@@ -11,6 +11,7 @@ OBJDUMP := objdump
 READELF := readelf
 QEMU := qemu-system-i386
 GDB := gdb
+SIZE := size
 SHELL := /bin/bash
 export SHELLOPTS := errexit:pipefail
 
@@ -98,7 +99,7 @@ cscope:
 	cscope -bk
 
 size:
-	$(READELF) -S iso/boot/${KERNEL}.elf | ./cal_size.pl
+	@$(SIZE) -A iso/boot/${KERNEL}.elf
 
 clean:
 	$(RM) ${OBJS} ${DEPS}
