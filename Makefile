@@ -9,7 +9,10 @@ AS := as
 NM := nm
 OBJDUMP := objdump
 READELF := readelf
+QEMU := qemu-system-i386
 GDB := gdb
+SIZE := size
+STRIP := strip
 SHELL := /bin/bash
 export SHELLOPTS := errexit:pipefail
 
@@ -33,7 +36,7 @@ OBJS = ${ASMOBJS} ${COBJS}
 
 .DELETE_ON_ERROR:
 
-.PHONY: all qemu dump gdb loc clean cscope tags size
+.PHONY: all qemu dump gdb loc clean cscope tags size strip
 
 all: ${KERNEL}.iso
 
@@ -74,13 +77,13 @@ include/config.h: Config.mk
 -include $(DEPS)
 
 qemu:
-	qemu-system-i386 -m 16M -kernel iso/boot/${KERNEL}.elf
+	$(QEMU) -m 16M -kernel iso/boot/${KERNEL}.elf
 
 dump:
 	$(OBJDUMP) -d iso/boot/${KERNEL}.elf | less
 
 gdb:
-	qemu-system-i386 -s -S -kernel iso/boot/${KERNEL}.elf &
+	$(QEMU) -s -S -kernel iso/boot/${KERNEL}.elf &
 	$(GDB) iso/boot/${KERNEL}.elf -ex 'target remote 127.0.0.1:1234'
 
 ${KERNEL}.iso: iso/boot/${KERNEL}.elf iso/boot/${KERNEL}.sym
@@ -97,7 +100,10 @@ cscope:
 	cscope -bk
 
 size:
-	$(READELF) -S iso/boot/${KERNEL}.elf | ./cal_size.pl
+	@$(SIZE) -A iso/boot/${KERNEL}.elf
+
+strip:
+	$(STRIP) -R .comment -g iso/boot/${KERNEL}.elf
 
 clean:
 	$(RM) ${OBJS} ${DEPS}
