@@ -48,7 +48,7 @@ static void *philosopher(void *args)
 	pthread_mutex_lock(&forks[second_fork]);
 	printf("philosopher %lu starts to eat\n", id);
 	sleep(1);
-	printf("philosopher %lu finishs eating\n", id);
+	printf("philosopher %lu finished eating\n", id);
 	pthread_mutex_unlock(&forks[second_fork]);
 	pthread_mutex_unlock(&forks[first_fork]);
 
