@@ -14,6 +14,7 @@ GDB := gdb
 SIZE := size
 STRIP := strip
 SHELL := /bin/bash
+APPLICATION ?= applications/shell.o
 export SHELLOPTS := errexit:pipefail
 
 include Config.mk
@@ -30,7 +31,7 @@ COBJS = kernel/main.o lib/string.o drivers/text_buffer.o lib/stdio.o \
 	lib/stdlib.o kernel/gdt.o kernel/interrupt.o kernel/idt.o \
 	lib/hexdump.o drivers/pic.o drivers/pit.o kernel/timer.o \
 	lib/circular_buffer.o drivers/keyboard.o kernel/pthread.o \
-	lib/readline.o applications/shell.o drivers/cmos.o lib/time.o
+	lib/readline.o ${APPLICATION} drivers/cmos.o lib/time.o
 DEPS = $(COBJS:.o=.d)
 OBJS = ${ASMOBJS} ${COBJS}
 
