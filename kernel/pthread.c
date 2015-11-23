@@ -384,30 +384,22 @@ int pthread_setname_np(pthread_t thread, const char *name)
 	return retval;
 }
 
-#define xchg(addr, val) \
-({ \
-	__typeof__(*(addr)) __val__ = val; \
- \
-	asm volatile("xchgl %0, %1" \
-		     : "+r"(__val__), "+m"(*addr) \
-		     : \
-		     : "memory", "cc"); \
- \
-	__val__; \
-})
+static inline int atomic_add_return(int v, volatile int *ptr)
+{
+	int retval = v;
 
-#define atomic_dec_and_test(ptr) \
-({ \
-	bool __retval__; \
- \
-	asm volatile("decl %0\n\t" \
-		     "setz %1" \
-		     : "+m"(*ptr), "=r"(__retval__) \
-		     : \
-		     : "memory", "cc"); \
- \
-	__retval__; \
-})
+	asm volatile("xaddl %0, %1"
+		     : "+r"(retval), "+m"(*ptr)
+		     :
+		     : "memory", "cc");
+
+	return retval + v;
+}
+
+static inline int atomic_sub_return(int v, volatile int *ptr)
+{
+	return atomic_add_return(-v, ptr);
+}
 
 int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr)
 {
@@ -433,14 +425,18 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 
 	assert(!in_irq);
 
-	if (atomic_dec_and_test(&mutex->lock))
+	if (atomic_sub_return(1, &mutex->lock) == 0)
 		return 0;
 	flags = interrupt_disable();
 	w.thread = pthread_self();
 	TAILQ_INSERT_TAIL(&mutex->wq, &w, link);
 	for (;;) {
-		if (mutex->lock >= 0 && xchg(&mutex->lock, -1) == 1)
+		if (mutex->lock == 1) {
+			mutex->lock = -1;
 			break;
+		} else {
+			mutex->lock = -1;
+		}
 		pthread_self()->state = PTHREAD_STATE_SLEEPING;
 		schedule();
 	}
@@ -454,7 +450,7 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 
 int pthread_mutex_trylock(pthread_mutex_t *mutex)
 {
-	if (atomic_dec_and_test(&mutex->lock))
+	if (atomic_sub_return(1, &mutex->lock) == 0)
 		return 0;
 
 	return EBUSY;
@@ -465,9 +461,10 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
 	unsigned long flags;
 	struct wait *w;
 
-	if (xchg(&mutex->lock, 1) == 0)
+	if (atomic_add_return(1, &mutex->lock) == 1)
 		return 0;
 	flags = interrupt_disable();
+	mutex->lock = 1;
 	w = TAILQ_FIRST(&mutex->wq);
 	if (w)
 		wake_up(w->thread);
