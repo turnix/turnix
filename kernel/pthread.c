@@ -231,6 +231,37 @@ void __pthread_exit(void)
 	schedule();
 }
 
+int pthread_detach(pthread_t thread)
+{
+	int retval = 0;
+	unsigned int flags = interrupt_disable();
+
+	switch (thread->state) {
+	case PTHREAD_STATE_NONE:
+	case PTHREAD_STATE_INIT:
+		retval = ESRCH;
+		break;
+	case PTHREAD_STATE_RUNNING:
+	case PTHREAD_STATE_SLEEPING:
+		if (thread->flags & PTHREAD_FLAG_DETACH) {
+			retval = EINVAL;
+		} else {
+			thread->flags |= PTHREAD_FLAG_DETACH;
+			if (thread->waiter)
+				wake_up(thread->waiter);
+		}
+		break;
+	case PTHREAD_STATE_EXIT:
+		thread->state = PTHREAD_STATE_NONE;
+		break;
+	default:
+		assert(0);
+	}
+	interrupt_enable(flags);
+
+	return retval;
+}
+
 static inline bool has_loop(pthread_t th)
 {
 	pthread_t i;

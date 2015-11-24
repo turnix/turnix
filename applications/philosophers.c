@@ -67,9 +67,9 @@ static void philosophers_init(void)
 	for (i = 0; i < PHILOSOPHERS_NUM; ++i) {
 		pthread_attr_init(&attr);
 		pthread_attr_setstack(&attr, stack[i], sizeof(stack[0]));
-		pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 		pthread_create(&tid, &attr, philosopher, (void*)i);
 		pthread_setname_np(tid, "philo");
+		pthread_detach(tid);
 		pthread_attr_destroy(&attr);
 	}
 }

@@ -82,16 +82,16 @@ static void producer_consumer_init(void)
 
 	pthread_attr_init(&attr);
 	pthread_attr_setstack(&attr, stack_producer, sizeof(stack_producer));
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	pthread_create(&tid, &attr, producer, NULL);
 	pthread_setname_np(tid, "producer");
+	pthread_detach(tid);
 	pthread_attr_destroy(&attr);
 
 	pthread_attr_init(&attr);
 	pthread_attr_setstack(&attr, stack_consumer, sizeof(stack_consumer));
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	pthread_create(&tid, &attr, consumer, NULL);
 	pthread_setname_np(tid, "consumer");
+	pthread_detach(tid);
 	pthread_attr_destroy(&attr);
 }
 application_init(producer_consumer_init);
