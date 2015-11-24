@@ -84,13 +84,13 @@ include/config.h: Config.mk
 
 -include $(DEPS)
 
-qemu:
+qemu: ${KERNEL}.elf
 	$(QEMU) -m 16M -kernel ${KERNEL}.elf
 
-dump:
+dump: ${KERNEL}.elf
 	$(OBJDUMP) -d ${KERNEL}.elf | less
 
-gdb:
+gdb: ${KERNEL}.elf
 	$(QEMU) -s -S -kernel ${KERNEL}.elf &
 	$(GDB) ${KERNEL}.elf -ex 'target remote 127.0.0.1:1234'
 
@@ -104,10 +104,10 @@ cscope:
 	find . -name '*.[hcS]' > cscope.files
 	cscope -bk
 
-size:
+size: ${KERNEL}.elf
 	@$(SIZE) -A ${KERNEL}.elf
 
-strip:
+strip: ${KERNEL}.elf
 	$(STRIP) -R .comment -g ${KERNEL}.elf
 
 clean:
