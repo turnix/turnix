@@ -322,9 +322,9 @@ static void shell_init(void)
 	pthread_attr_setstack(&attr, stack, sizeof(stack));
 	sched_param.sched_priority = sched_get_priority_max(SCHED_RR);
 	pthread_attr_setschedparam(&attr, &sched_param);
-	pthread_attr_setdetachstate(&attr, PTHREAD_CREATE_DETACHED);
 	pthread_create(&tid, &attr, shell, NULL);
 	pthread_setname_np(tid, "shell");
+	pthread_detach(tid);
 	pthread_attr_destroy(&attr);
 }
 application_init(shell_init);

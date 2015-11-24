@@ -41,10 +41,17 @@ OBJS = ${ASMOBJS} ${COBJS}
 
 all: ${KERNEL}.iso
 
-iso/boot/${KERNEL}.sym: iso/boot/${KERNEL}.elf
+${KERNEL}.iso: ${KERNEL}.elf ${KERNEL}.sym grub.cfg.in
+	test -d iso/boot/grub || mkdir -p iso/boot/grub
+	cp ${KERNEL}.elf iso/boot/
+	cp ${KERNEL}.sym iso/boot/
+	sed 's/@KERNEL@/${KERNEL}/g' grub.cfg.in > iso/boot/grub/grub.cfg
+	grub-mkrescue -o $@ --product-name ${KERNEL} iso
+
+${KERNEL}.sym: ${KERNEL}.elf
 	$(NM) -nC $< > $@
 
-iso/boot/${KERNEL}.elf: ${OBJS} link.ld
+${KERNEL}.elf: ${OBJS} link.ld
 	$(LD) -o $@ $(filter %.o,$^) ${LDFLAGS}
 
 .c.o:
@@ -77,18 +84,15 @@ include/config.h: Config.mk
 
 -include $(DEPS)
 
-qemu:
-	$(QEMU) -m 16M -kernel iso/boot/${KERNEL}.elf
+qemu: ${KERNEL}.elf
+	$(QEMU) -m 16M -kernel ${KERNEL}.elf
 
-dump:
-	$(OBJDUMP) -d iso/boot/${KERNEL}.elf | less
+dump: ${KERNEL}.elf
+	$(OBJDUMP) -d ${KERNEL}.elf | less
 
-gdb:
-	$(QEMU) -s -S -kernel iso/boot/${KERNEL}.elf &
-	$(GDB) iso/boot/${KERNEL}.elf -ex 'target remote 127.0.0.1:1234'
-
-${KERNEL}.iso: iso/boot/${KERNEL}.elf iso/boot/${KERNEL}.sym
-	grub-mkrescue -o $@ --product-name ${KERNEL} iso
+gdb: ${KERNEL}.elf
+	$(QEMU) -s -S -kernel ${KERNEL}.elf &
+	$(GDB) ${KERNEL}.elf -ex 'target remote 127.0.0.1:1234'
 
 loc:
 	find . -name '*.[hcS]' | xargs wc -l | sort -n
@@ -100,16 +104,15 @@ cscope:
 	find . -name '*.[hcS]' > cscope.files
 	cscope -bk
 
-size:
-	@$(SIZE) -A iso/boot/${KERNEL}.elf
+size: ${KERNEL}.elf
+	@$(SIZE) -A ${KERNEL}.elf
 
-strip:
-	$(STRIP) -R .comment -g iso/boot/${KERNEL}.elf
+strip: ${KERNEL}.elf
+	$(STRIP) -R .comment -g ${KERNEL}.elf
 
 clean:
 	$(RM) ${OBJS} ${DEPS}
-	$(RM) iso/boot/${KERNEL}.elf
-	$(RM) iso/boot/${KERNEL}.sym
-	$(RM) *.iso
+	$(RM) *.iso *.elf *.sym
+	$(RM) -r iso
 	$(RM) include/irq.h
 	$(RM) include/config.h

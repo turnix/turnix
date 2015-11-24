@@ -3,6 +3,7 @@
 *.iso
 *.d
 *.sym
+iso
 include/irq.h
 include/config.h
 tags

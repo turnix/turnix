@@ -1,0 +1,3 @@
+menuentry "@KERNEL@" {
+	multiboot /boot/@KERNEL@.elf
+}
