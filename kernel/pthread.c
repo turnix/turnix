@@ -473,8 +473,11 @@ int pthread_cond_signal(pthread_cond_t *cond)
 
 	flags = interrupt_disable();
 	w = TAILQ_FIRST(&cond->wq);
-	if (w)
+	if (w) {
+		TAILQ_REMOVE(&cond->wq, w, link);
+		TAILQ_ENTRY_INIT(&w->link);
 		wake_up(w->thread);
+	}
 	interrupt_enable(flags);
 
 	return 0;
@@ -487,8 +490,11 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
 
 	flags = interrupt_disable();
 	if (!TAILQ_EMPTY(&cond->wq)) {
-		TAILQ_FOREACH(w, &cond->wq, link)
+		while ((w = TAILQ_FIRST(&cond->wq))) {
+			TAILQ_REMOVE(&cond->wq, w, link);
+			TAILQ_ENTRY_INIT(&w->link);
 			__pthread_set_running(w->thread);
+		}
 		schedule();
 	}
 	interrupt_enable(flags);
@@ -529,7 +535,8 @@ int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 		schedule();
 	}
 	pthread_mutex_lock(mutex);
-	TAILQ_REMOVE(&cond->wq, &w, link);
+	if (!TAILQ_ENTRY_EMPTY(&w.link))
+		TAILQ_REMOVE(&cond->wq, &w, link);
 	interrupt_enable(flags);
 
 	return retval;
