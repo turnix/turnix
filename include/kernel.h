@@ -29,9 +29,6 @@
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
-#define KERNEL_CS 0x8
-#define KERNEL_DS 0x10
-
 #define container_of(ptr, type, member) \
     ((type *)(((char *)ptr) - offsetof(type, member)))
 

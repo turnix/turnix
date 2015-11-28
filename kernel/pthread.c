@@ -31,12 +31,7 @@
 #include <strings.h>
 #include <string.h>
 #include <timer.h>
-
-#if CONFIG_SWI
-enum {
-	IRQ_SYSTEM_CALL = 0x80
-};
-#endif
+#include <arch.h>
 
 #ifndef CONFIG_PTHREAD_MAX_NUM
 #define CONFIG_PTHREAD_MAX_NUM 32
@@ -133,19 +128,9 @@ int pthread_setschedprio(pthread_t thread, int priority)
 pthread_t pthread_current;
 pthread_t pthread_next;
 
-#if CONFIG_SWI
-static void system_call(struct interrupt_context *ctx)
-{
-	(void)ctx;
-}
-#endif
-
 void pthread_init(void)
 {
 	pthread_next = pthread_current = &pthread_idle;
-#if CONFIG_SWI
-	interrupt_register(IRQ_SYSTEM_CALL, system_call);
-#endif
 	run_queue_init();
 
 	pthread_idle.state = PTHREAD_STATE_RUNNING;
@@ -161,15 +146,6 @@ void pthread_init(void)
 	pthread_idle.ticks = 0;
 	run_queue_enqueue(&pthread_idle);
 }
-
-#if CONFIG_SWI
-static inline void switch_context(void)
-{
-	asm volatile("int $" __stringify(IRQ_SYSTEM_CALL) :::"memory");
-}
-#else
-void switch_context(void);
-#endif
 
 void __schedule(void)
 {
@@ -198,7 +174,7 @@ void schedule(void)
 	flags = interrupt_disable();
 	__schedule();
 	if (pthread_next != pthread_current)
-		switch_context();
+		arch_context_switch();
 	interrupt_enable(flags);
 }
 
@@ -327,8 +303,6 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	unsigned int i;
 	unsigned long flags;
 	pthread_t th;
-	unsigned long *stack;
-	struct interrupt_context *ctx;
 
 	flags = interrupt_disable();
 	for (i = 0; i < ARRAY_SIZE(pthreads); ++i) {
@@ -354,22 +328,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	th->waiter = NULL;
 	th->error_code = 0;
 	th->ticks = 0;
-	stack = (unsigned long *)((char *)th->stack_addr + th->stack_size);
-	stack[-1] = (unsigned long)arg;
-	stack[-2] = (unsigned long)start_routine;
-	stack[-3] = (unsigned long)abort;
-#if CONFIG_USERSPACE
-	ctx = (struct interrupt_context *)(stack - 1) - 1;
-	ctx->gs = ctx->fs = ctx->es = ctx->ds = KERNEL_DS;
-#else
-	ctx = (struct interrupt_context *)(stack - 3) - 1;
-#endif
-	ctx->eip = (unsigned long)__start_routine;
-	ctx->ebp = (unsigned long)(stack - 1);
-	ctx->esp = (unsigned long)(stack - 3);
-	ctx->cs = KERNEL_CS;
-	ctx->eflags = CPU_FLAG_IF;
-	th->esp = (unsigned long)ctx;
+	arch_pthread_init(th, __start_routine, start_routine, arg);
 	wake_up(th);
 	*thread = th;
 
@@ -413,18 +372,6 @@ int pthread_setname_np(pthread_t thread, const char *name)
 	interrupt_enable(flags);
 
 	return retval;
-}
-
-static inline int atomic_add_return(int v, volatile int *ptr)
-{
-	int retval = v;
-
-	asm volatile("xaddl %0, %1"
-		     : "+r"(retval), "+m"(*ptr)
-		     :
-		     : "memory", "cc");
-
-	return retval + v;
 }
 
 static inline int atomic_sub_return(int v, volatile int *ptr)
@@ -526,8 +473,11 @@ int pthread_cond_signal(pthread_cond_t *cond)
 
 	flags = interrupt_disable();
 	w = TAILQ_FIRST(&cond->wq);
-	if (w)
+	if (w) {
+		TAILQ_REMOVE(&cond->wq, w, link);
+		TAILQ_ENTRY_INIT(&w->link);
 		wake_up(w->thread);
+	}
 	interrupt_enable(flags);
 
 	return 0;
@@ -540,8 +490,11 @@ int pthread_cond_broadcast(pthread_cond_t *cond)
 
 	flags = interrupt_disable();
 	if (!TAILQ_EMPTY(&cond->wq)) {
-		TAILQ_FOREACH(w, &cond->wq, link)
+		while ((w = TAILQ_FIRST(&cond->wq))) {
+			TAILQ_REMOVE(&cond->wq, w, link);
+			TAILQ_ENTRY_INIT(&w->link);
 			__pthread_set_running(w->thread);
+		}
 		schedule();
 	}
 	interrupt_enable(flags);
@@ -582,7 +535,8 @@ int pthread_cond_timedwait(pthread_cond_t *cond, pthread_mutex_t *mutex,
 		schedule();
 	}
 	pthread_mutex_lock(mutex);
-	TAILQ_REMOVE(&cond->wq, &w, link);
+	if (!TAILQ_ENTRY_EMPTY(&w.link))
+		TAILQ_REMOVE(&cond->wq, &w, link);
 	interrupt_enable(flags);
 
 	return retval;

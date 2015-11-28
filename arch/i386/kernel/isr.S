@@ -59,8 +59,8 @@ isr\irq:
 .endm
 
 #if !CONFIG_SWI
-.global switch_context
-switch_context:
+.global arch_context_switch
+arch_context_switch:
 	pop %eax
 	pushf
 	push %cs
@@ -70,7 +70,7 @@ switch_context:
 	save_context
 	mov pthread_current, %eax
 	mov pthread_next, %ebx
-	jmp __switch_context
+	jmp __arch_context_switch
 #endif
 
 isr_comm:
@@ -90,7 +90,7 @@ no_schedule:
 	mov pthread_next, %ebx
 	cmp %eax, %ebx
 	je restore
-__switch_context:
+__arch_context_switch:
 	test %eax, %eax
 	jz no_save
 	mov %esp, (%eax)

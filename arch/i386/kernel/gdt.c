@@ -24,7 +24,7 @@
 
 #include <gdt.h>
 #include <stdint.h>
-#include <kernel.h>
+#include <arch.h>
 #include <stringify.h>
 
 struct gd {
