@@ -214,4 +214,7 @@ static inline int pthread_cond_wait(pthread_cond_t *cond,
 
 void pthread_foreach(void (*callback)(pthread_t));
 
+void arch_pthread_init(pthread_t th, void (*wrapper)(void *(*)(void *), void *),
+		   void *(*start_routine)(void *), void *arg);
+
 #endif  /* PTHREAD_H */

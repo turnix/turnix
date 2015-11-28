@@ -25,29 +25,8 @@
 #ifndef INTERRUPT_H
 #define INTERRUPT_H
 
-#include <config.h>
-#include <stdint.h>
 #include <stdbool.h>
-
-enum {
-	CPU_FLAG_IF = 0x200
-};
-
-struct interrupt_context {
-#if CONFIG_USERSPACE
-	uint16_t gs, __pad0, fs, __pad1, es, __pad2, ds, __pad3;
-#endif
-	uint32_t edi, esi, ebp, esp, ebx, edx, ecx, eax;
-	uint32_t irq, error;
-	uint32_t eip;
-	uint16_t cs, __pad4;
-	uint32_t eflags;
-#if CONFIG_USERSPACE
-	uint32_t user_esp;
-	uint16_t user_ss;
-	uint16_t __pad5;
-#endif
-};
+#include <arch.h>
 
 extern bool in_irq;
 
@@ -55,29 +34,5 @@ typedef void interrupt_handler_t(struct interrupt_context *ctx);
 
 interrupt_handler_t *interrupt_register(unsigned int irq,
 					interrupt_handler_t *handler);
-void interrupt_init(void);
-
-static inline unsigned long interrupt_disable(void)
-{
-	unsigned long flags;
-
-	asm volatile("pushf\n\t"
-		     "pop %0\n\t"
-		     "cli"
-		     : "=rm"(flags)
-		     :
-		     : "memory");
-
-	return flags;
-}
-
-static inline void interrupt_enable(unsigned long flags)
-{
-	asm volatile("push %0\n\t"
-		     "popf"
-		     :
-		     : "g"(flags)
-		     : "memory", "cc");
-}
 
 #endif  /* INTERRUPT_H */

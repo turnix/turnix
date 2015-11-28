@@ -4,7 +4,7 @@
 *.d
 *.sym
 iso
-include/irq.h
+arch/i386/include/irq.h
 include/config.h
 tags
 cscope.*

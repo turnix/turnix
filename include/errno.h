@@ -28,6 +28,7 @@
 #include <config.h>
 #include <stddef.h>
 #include <stdint.h>
+#include <arch.h>
 
 #include <sys/queue.h>
 
@@ -54,7 +55,7 @@ enum {
 };
 
 struct pthread {
-	unsigned long		esp; /* it must be the first */
+	struct arch_context	context;
 	enum pthread_state	state;
 	void			*retval;
 	void			*stack_addr;

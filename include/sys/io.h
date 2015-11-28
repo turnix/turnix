@@ -25,22 +25,6 @@
 #ifndef SYS_IO_H
 #define SYS_IO_H
 
-static inline unsigned char inb(unsigned short port)
-{
-	unsigned char value;
-
-	asm volatile("inb %1, %0"
-		     : "=a"(value)
-		     : "dN"(port));
-
-	return value;
-}
-
-static void outb(unsigned char value, unsigned short port)
-{
-	asm volatile("outb %0, %1"
-		     :
-		     : "a"(value), "dN"(port));
-}
+#include <arch.h>
 
 #endif  /* SYS_IO_H */

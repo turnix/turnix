@@ -1,19 +1,21 @@
 KERNEL := turnix
-CFLAGS += -Wall -Werror -Wextra -O2 -m32 -nostdlib -nostdinc -fno-builtin \
+CFLAGS += -Wall -Werror -Wextra -O2 -nostdlib -nostdinc -fno-builtin \
 	  -fno-stack-protector -nostartfiles -nodefaultlibs -std=gnu99 \
 	  -Iinclude -ffreestanding
-LDFLAGS += -T link.ld -melf_i386
-CC := gcc
-LD := ld
-AS := as
-NM := nm
-OBJDUMP := objdump
-READELF := readelf
-QEMU := qemu-system-i386
+ARCH ?= i386
+include arch/${ARCH}/Makefile
+LDFLAGS += -T ${LINK_SCRIPT}
+CC := ${CROSS_COMPILE}gcc
+LD := ${CROSS_COMPILE}ld
+AS := ${CROSS_COMPILE}as
+NM := ${CROSS_COMPILE}nm
+OBJDUMP := ${CROSS_COMPILE}objdump
+READELF := ${CROSS_COMPILE}readelf
+SIZE := ${CROSS_COMPILE}size
+STRIP := ${CROSS_COMPILE}strip
 GDB := gdb
-SIZE := size
-STRIP := strip
 SHELL := /bin/bash
+QEMU ?= qemu-system-${ARCH}
 APPLICATION ?= applications/shell.o
 export SHELLOPTS := errexit:pipefail
 
@@ -26,32 +28,22 @@ else
 	LDFLAGS += --gc-sections --print-gc-sections
 endif
 
-ASMOBJS = boot/multiboot.o kernel/isr.o
-COBJS = kernel/main.o lib/string.o drivers/text_buffer.o lib/stdio.o \
-	lib/stdlib.o kernel/gdt.o kernel/interrupt.o kernel/idt.o \
-	lib/hexdump.o drivers/pic.o drivers/pit.o kernel/timer.o \
-	lib/circular_buffer.o drivers/keyboard.o kernel/pthread.o \
-	lib/readline.o ${APPLICATION} drivers/cmos.o lib/time.o
+COBJS += kernel/main.o lib/string.o lib/stdio.o lib/stdlib.o \
+	 kernel/interrupt.o lib/hexdump.o kernel/timer.o lib/circular_buffer.o \
+	 kernel/pthread.o lib/readline.o ${APPLICATION} lib/time.o
 DEPS = $(COBJS:.o=.d)
 OBJS = ${ASMOBJS} ${COBJS}
 
 .DELETE_ON_ERROR:
 
-.PHONY: all qemu dump gdb loc clean cscope tags size strip
+.PHONY: all qemu dump gdb loc clean arch-clean cscope tags size strip
 
-all: ${KERNEL}.iso
-
-${KERNEL}.iso: ${KERNEL}.elf ${KERNEL}.sym grub.cfg.in
-	test -d iso/boot/grub || mkdir -p iso/boot/grub
-	cp ${KERNEL}.elf iso/boot/
-	cp ${KERNEL}.sym iso/boot/
-	sed 's/@KERNEL@/${KERNEL}/g' grub.cfg.in > iso/boot/grub/grub.cfg
-	grub-mkrescue -o $@ --product-name ${KERNEL} iso
+all: ${OUTPUT}
 
 ${KERNEL}.sym: ${KERNEL}.elf
 	$(NM) -nC $< > $@
 
-${KERNEL}.elf: ${OBJS} link.ld
+${KERNEL}.elf: ${OBJS} ${LINK_SCRIPT}
 	$(LD) -o $@ $(filter %.o,$^) ${LDFLAGS}
 
 .c.o:
@@ -59,15 +51,6 @@ ${KERNEL}.elf: ${OBJS} link.ld
 
 .S.o:
 	$(CC) -c -o $@ $< ${CFLAGS}
-
-kernel/isr.o: include/irq.h include/config.h
-
-kernel/idt.o: include/irq.h
-
-include/irq.h: gen_irq.sh
-	./gen_irq.sh > $@
-
-kernel/idt.d: include/irq.h
 
 %.o: %.c %.d
 
@@ -110,9 +93,7 @@ size: ${KERNEL}.elf
 strip: ${KERNEL}.elf
 	$(STRIP) -R .comment -g ${KERNEL}.elf
 
-clean:
+clean: arch-clean
 	$(RM) ${OBJS} ${DEPS}
-	$(RM) *.iso *.elf *.sym
-	$(RM) -r iso
-	$(RM) include/irq.h
+	$(RM) ${OUTPUT} *.elf *.sym
 	$(RM) include/config.h

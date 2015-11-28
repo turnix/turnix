@@ -25,6 +25,7 @@
 #include <idt.h>
 #include <stdint.h>
 #include <string.h>
+#include <arch.h>
 #include <kernel.h>
 
 enum id_type {

@@ -22,19 +22,14 @@
  * THE SOFTWARE.
  */
 
-#include <text_buffer.h>
 #include <multiboot.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <gdt.h>
-#include <pit.h>
-#include <interrupt.h>
 #include <stdbool.h>
-#include <keyboard.h>
 #include <pthread.h>
-#include <timer.h>
 #include <application.h>
-#include <cmos.h>
+#include <interrupt.h>
+#include <arch.h>
 
 extern init_func_t * const application_init_begin[];
 extern init_func_t * const application_init_end[];
@@ -44,7 +39,7 @@ int main(struct multiboot_info *info)
 {
 	init_func_t * const *func;
 
-	text_buffer_init();
+	arch_early_init();
 
 	if ((info->flags & 1) == 0) {
 		printf("no memory info\n");
@@ -59,11 +54,7 @@ int main(struct multiboot_info *info)
 	printf("  heap:  %08x - %08x\n", (uint32_t)&kernel_end,
 	       info->mem_upper);
 
-	gdt_init();
-	interrupt_init();
-	pit_init();
-	cmos_init();
-	keyboard_init();
+	arch_init();
 	pthread_init();
 
 	in_irq = 1;
@@ -73,12 +64,11 @@ int main(struct multiboot_info *info)
 	}
 	in_irq = 0;
 
-	asm volatile("sti" : : : "memory");
+	arch_enable_interrupt();
 	pthread_yield();
 
-	for (;;) {
-		asm volatile("hlt":::"memory");
-	}
+	for (;;)
+		arch_halt();
 
 	return 0;
 }
