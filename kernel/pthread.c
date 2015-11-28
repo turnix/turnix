@@ -174,7 +174,7 @@ void schedule(void)
 	flags = interrupt_disable();
 	__schedule();
 	if (pthread_next != pthread_current)
-		switch_context();
+		arch_context_switch();
 	interrupt_enable(flags);
 }
 

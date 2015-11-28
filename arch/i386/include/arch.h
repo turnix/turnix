@@ -57,12 +57,12 @@ struct arch_context {
 };
 
 #if CONFIG_SWI
-static inline void switch_context(void)
+static inline void arch_context_switch(void)
 {
 	asm volatile("int $" __stringify(IRQ_SYSTEM_CALL) :::"memory");
 }
 #else
-void switch_context(void);
+void arch_context_switch(void);
 #endif
 
 static inline void arch_halt(void)
