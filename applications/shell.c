@@ -27,7 +27,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <keyboard.h>
 #include <application.h>
 #include <pthread.h>
 #include <shell.h>

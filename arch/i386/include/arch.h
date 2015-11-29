@@ -130,6 +130,7 @@ static inline int atomic_add_return(int v, volatile int *ptr)
 
 void arch_early_init(void);
 void arch_init(void);
+void reboot(void);
 void interrupt_init(void);
 #endif  /* __ASSEMBLY__ */
 
