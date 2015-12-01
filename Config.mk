@@ -10,3 +10,4 @@ CONFIG_MOTD = "\nTurnix Copyright(C) 2015 Changli Gao <xiaosuo@gmail.com>\n\n"
 CONFIG_LINE_MAX = 2048
 CONFIG_RR = 1
 CONFIG_TZ = -480
+CONFIG_IDLE_STACK_SIZE = 1024

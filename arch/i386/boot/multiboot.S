@@ -22,12 +22,14 @@
  * THE SOFTWARE.
  */
 
+#define __ASSEMBLY__
+#include "kernel.h"
+
 .set ALIGN_ON_PAGE, 1<<0
 .set MEMINFO,       1<<1
 .set FLAGS,         ALIGN_ON_PAGE | MEMINFO
 .set MAGIC,         0x1BADB002
 .set CHECKSUM,      -(MAGIC + FLAGS)
-.set STACK_SIZE,    1024
 
 .section .multiboot
 .align 4
@@ -38,7 +40,16 @@
 .section .text
 .global _start
 _start:
-	mov $stack_top, %esp
+	/* fill the stack with STACK_FILL */
+	cld
+	movl $STACK_FILL, idle_stack_bottom
+	mov $idle_stack_bottom, %esi
+	mov $CONFIG_IDLE_STACK_SIZE, %ecx
+	shr $2, %ecx
+	dec %ecx
+	lea 4(%esi), %edi
+	rep; movsl
+	mov $idle_stack_top, %esp
 	push $0
 	popf
 	push 8(%ebx)
@@ -81,6 +92,7 @@ _start:
 .string "HANG!"
 
 .section .boot_stack, "aw", @nobits
-stack_bottom:
-.skip STACK_SIZE
-stack_top:
+.global idle_stack_bottom
+idle_stack_bottom:
+.skip CONFIG_IDLE_STACK_SIZE
+idle_stack_top:

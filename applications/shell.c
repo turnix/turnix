@@ -279,8 +279,8 @@ static void show_thread(pthread_t th)
 		[PTHREAD_STATE_EXIT]		= "exit",
 	};
 
-	printf("%s %p %u %ld.%03ld %s\n", state_str[th->state], th,
-	       th->priority, th->stime.tv_sec,
+	printf("%s %p %u %lu %ld.%03ld %s\n", state_str[th->state], th,
+	       th->priority, stack_check_size(th), th->stime.tv_sec,
 	       th->stime.tv_usec / USECS_PER_MSEC, th->name);
 }
 
@@ -288,7 +288,7 @@ static int do_ps(int argc, char *argv[]) {
 	(void)argc;
 	(void)argv;
 
-	printf("state tid priority time name\n");
+	printf("state tid priority stack time name\n");
 	pthread_foreach(show_thread);
 
 	return 0;

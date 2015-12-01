@@ -20,7 +20,10 @@ arch/i386/kernel/idt.o: arch/i386/include/irq.h
 
 arch/i386/kernel/idt.d: arch/i386/include/irq.h
 
-arch/i386/kernel/isr.o: arch/i386/include/irq.h include/config.h
+arch/i386/kernel/isr.o: arch/i386/include/irq.h include/config.h \
+	include/kernel.h include/stddef.h
+
+arch/i386/boot/multiboot.o: include/kernel.h include/stddef.h include/config.h
 
 arch/i386/kernel/interrupt.o: arch/i386/include/irq.h
 
