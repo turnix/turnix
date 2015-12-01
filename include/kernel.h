@@ -26,10 +26,17 @@
 #define KERNEL_H
 
 #include <stddef.h>
+#include <config.h>
 
 #define ARRAY_SIZE(x) (sizeof(x) / sizeof(x[0]))
 
 #define container_of(ptr, type, member) \
     ((type *)(((char *)ptr) - offsetof(type, member)))
+
+#define STACK_FILL 0x5a00ffa5
+
+#ifndef CONFIG_IDLE_STACK_SIZE
+#define CONFIG_IDLE_STACK_SIZE	1024
+#endif
 
 #endif  /* KERNEL_H */

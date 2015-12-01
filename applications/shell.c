@@ -27,7 +27,6 @@
 #include <stdlib.h>
 #include <stdbool.h>
 #include <string.h>
-#include <keyboard.h>
 #include <application.h>
 #include <pthread.h>
 #include <shell.h>
@@ -280,15 +279,16 @@ static void show_thread(pthread_t th)
 		[PTHREAD_STATE_EXIT]		= "exit",
 	};
 
-	printf("%p %s %s %lu.%03lu\n", th, state_str[th->state], th->name,
-	       th->ticks / TICKS_PER_SEC,
-	       (th->ticks % TICKS_PER_SEC) * MSECS_PER_TICK);
+	printf("%s %p %u %lu %ld.%03ld %s\n", state_str[th->state], th,
+	       th->priority, stack_check_size(th), th->stime.tv_sec,
+	       th->stime.tv_usec / USECS_PER_MSEC, th->name);
 }
 
 static int do_ps(int argc, char *argv[]) {
 	(void)argc;
 	(void)argv;
 
+	printf("state tid priority stack time name\n");
 	pthread_foreach(show_thread);
 
 	return 0;

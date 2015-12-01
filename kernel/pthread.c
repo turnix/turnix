@@ -128,22 +128,27 @@ int pthread_setschedprio(pthread_t thread, int priority)
 pthread_t pthread_current;
 pthread_t pthread_next;
 
+extern unsigned long idle_stack_bottom;
+
 void pthread_init(void)
 {
 	pthread_next = pthread_current = &pthread_idle;
 	run_queue_init();
 
 	pthread_idle.state = PTHREAD_STATE_RUNNING;
+	pthread_idle.stack_addr = &idle_stack_bottom;
+	pthread_idle.stack_size = CONFIG_IDLE_STACK_SIZE;
 	TAILQ_ENTRY_INIT(&pthread_idle.link);
 	pthread_idle.priority = SCHED_RR_PRIORITY_IDLE;
 #if CONFIG_RR
 	pthread_idle.timeslice = CONFIG_TIMESLICE;
 #endif
-	pthread_idle.flags = 0;
+	pthread_idle.flags = PTHREAD_FLAG_DETACH;
 	strcpy(pthread_idle.name, "idle");
 	pthread_idle.waiter = NULL;
 	pthread_idle.error_code = 0;
-	pthread_idle.ticks = 0;
+	pthread_idle.stime.tv_sec = 0;
+	pthread_idle.stime.tv_usec = 0;
 	run_queue_enqueue(&pthread_idle);
 }
 
@@ -297,6 +302,26 @@ static void __start_routine(void *(*start_routine)(void *), void *arg)
 	pthread_exit(start_routine(arg));
 }
 
+static inline void stack_check_init(void *stack_addr, size_t stack_size)
+{
+	unsigned long *addr = stack_addr;
+
+	stack_size /= sizeof(long);
+	while (stack_size-- > 0)
+		*addr++ = STACK_FILL;
+}
+
+size_t stack_check_size(pthread_t th)
+{
+	unsigned long *used = th->stack_addr;
+	unsigned long *top = th->stack_addr + th->stack_size;
+
+	while (used < top && *used == STACK_FILL)
+		++used;
+
+	return (top - used) * sizeof(long);
+}
+
 int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 		   void *(*start_routine)(void *), void *arg)
 {
@@ -316,6 +341,7 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 		return EAGAIN;
 	th = &pthreads[i];
 	th->retval = NULL;
+	stack_check_init(attr->stack_addr, attr->stack_size);
 	th->stack_addr = attr->stack_addr;
 	th->stack_size = attr->stack_size;
 	TAILQ_ENTRY_INIT(&th->link);
@@ -327,7 +353,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	strcpy(th->name, "unnamed");
 	th->waiter = NULL;
 	th->error_code = 0;
-	th->ticks = 0;
+	th->stime.tv_sec = 0;
+	th->stime.tv_usec = 0;
 	arch_pthread_init(th, __start_routine, start_routine, arg);
 	wake_up(th);
 	*thread = th;

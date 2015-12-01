@@ -217,4 +217,6 @@ void pthread_foreach(void (*callback)(pthread_t));
 void arch_pthread_init(pthread_t th, void (*wrapper)(void *(*)(void *), void *),
 		   void *(*start_routine)(void *), void *arg);
 
+size_t stack_check_size(pthread_t th);
+
 #endif  /* PTHREAD_H */
