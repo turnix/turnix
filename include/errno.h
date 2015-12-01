@@ -31,6 +31,7 @@
 #include <arch.h>
 
 #include <sys/queue.h>
+#include <sys/time.h>
 
 enum {
 	EBUSY = 1,
@@ -69,7 +70,7 @@ struct pthread {
 	char			name[PTHREAD_NAME_SIZE];
 	struct pthread		*waiter;
 	int			error_code;
-	unsigned long		ticks;
+	struct timeval		stime;
 };
 
 extern struct pthread *pthread_current;

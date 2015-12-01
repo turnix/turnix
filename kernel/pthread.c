@@ -143,7 +143,8 @@ void pthread_init(void)
 	strcpy(pthread_idle.name, "idle");
 	pthread_idle.waiter = NULL;
 	pthread_idle.error_code = 0;
-	pthread_idle.ticks = 0;
+	pthread_idle.stime.tv_sec = 0;
+	pthread_idle.stime.tv_usec = 0;
 	run_queue_enqueue(&pthread_idle);
 }
 
@@ -327,7 +328,8 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	strcpy(th->name, "unnamed");
 	th->waiter = NULL;
 	th->error_code = 0;
-	th->ticks = 0;
+	th->stime.tv_sec = 0;
+	th->stime.tv_usec = 0;
 	arch_pthread_init(th, __start_routine, start_routine, arg);
 	wake_up(th);
 	*thread = th;

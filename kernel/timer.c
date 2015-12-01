@@ -224,6 +224,7 @@ void timer_update(void)
 
 	update_timeval(&wall_clock.tv);
 	update_timeval(&monotonic_clock);
+	update_timeval(&pthread_current->stime);
 
 	while (timer_context.n > 0 &&
 	       !time_after(timer_context.heap[0]->expires, now)) {
@@ -237,7 +238,6 @@ void timer_update(void)
 	if (--pthread_current->timeslice == 0)
 		pthread_next = NULL;
 #endif
-	pthread_current->ticks++;
 }
 
 time_t time(time_t *t)

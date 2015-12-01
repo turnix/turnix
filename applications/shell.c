@@ -280,8 +280,7 @@ static void show_thread(pthread_t th)
 	};
 
 	printf("%p %s %s %lu.%03lu\n", th, state_str[th->state], th->name,
-	       th->ticks / TICKS_PER_SEC,
-	       (th->ticks % TICKS_PER_SEC) * MSECS_PER_TICK);
+	       th->stime.tv_sec, th->stime.tv_usec / USECS_PER_MSEC);
 }
 
 static int do_ps(int argc, char *argv[]) {
