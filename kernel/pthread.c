@@ -410,7 +410,9 @@ int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr)
 {
 	mutex->lock = 1;
 	TAILQ_INIT(&mutex->wq);
-	(void)attr;
+	mutex->type = attr->type;
+	mutex->owner = NULL;
+	mutex->recursive_count = 0;
 
 	return 0;
 }
@@ -430,8 +432,16 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 
 	assert(!in_irq);
 
-	if (atomic_sub_return(1, &mutex->lock) == 0)
+	if (atomic_sub_return(1, &mutex->lock) == 0) {
+		mutex->owner = pthread_current;
+		mutex->recursive_count = 1;
 		return 0;
+	}
+	if (mutex->type == PTHREAD_MUTEX_RECURSIVE_NP &&
+	    mutex->owner == pthread_current) {
+		mutex->recursive_count++;
+		return 0;
+	}
 	flags = interrupt_disable();
 	w.thread = pthread_self();
 	TAILQ_INSERT_TAIL(&mutex->wq, &w, link);
@@ -449,14 +459,24 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 	if (TAILQ_EMPTY(&mutex->wq))
 		mutex->lock = 0;
 	interrupt_enable(flags);
+	mutex->owner = pthread_current;
+	mutex->recursive_count = 1;
 
 	return 0;
 }
 
 int pthread_mutex_trylock(pthread_mutex_t *mutex)
 {
-	if (atomic_sub_return(1, &mutex->lock) == 0)
+	if (atomic_sub_return(1, &mutex->lock) == 0) {
+		mutex->owner = pthread_current;
+		mutex->recursive_count = 1;
 		return 0;
+	}
+	if (mutex->type == PTHREAD_MUTEX_RECURSIVE_NP &&
+	    mutex->owner == pthread_current) {
+		mutex->recursive_count++;
+		return 0;
+	}
 
 	return EBUSY;
 }
@@ -466,6 +486,9 @@ int pthread_mutex_unlock(pthread_mutex_t *mutex)
 	unsigned long flags;
 	struct wait *w;
 
+	if (--mutex->recursive_count != 0)
+		return 0;
+	mutex->owner = NULL;
 	if (atomic_add_return(1, &mutex->lock) == 1)
 		return 0;
 	flags = interrupt_disable();
