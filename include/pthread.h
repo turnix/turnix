@@ -185,11 +185,12 @@ static inline int pthread_mutexattr_gettype(pthread_mutexattr_t *attr,
 }
 
 struct pthread_mutex {
-	volatile int		lock;
-	struct wait_queue	wq;
-	int			type;
-	pthread_t		owner;
-	int			recursive_count;
+	volatile int			lock;
+	struct wait_queue		wq;
+	int				type;
+	pthread_t			owner;
+	int				recursive_count;
+	TAILQ_ENTRY(, pthread_mutex)	link;
 };
 
 typedef struct pthread_mutex pthread_mutex_t;
