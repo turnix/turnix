@@ -33,6 +33,8 @@
 #include <timer.h>
 #include <hexdump.h>
 
+#include <sys/utsname.h>
+
 #include <readline/readline.h>
 
 #ifndef CONFIG_PROMPT
@@ -285,7 +287,8 @@ static void show_thread(pthread_t th)
 	       th->stime.tv_usec / USECS_PER_MSEC, th->name);
 }
 
-static int do_ps(int argc, char *argv[]) {
+static int do_ps(int argc, char *argv[])
+{
 	(void)argc;
 	(void)argv;
 
@@ -300,7 +303,8 @@ static __shell_cmd struct shell_cmd cmd_ps = {
 	.handler	= do_ps,
 };
 
-static int do_hexdump(int argc, char *argv[]) {
+static int do_hexdump(int argc, char *argv[])
+{
 	if (argc != 3) {
 		printf("invalid arguments\n");
 		return -1;
@@ -316,6 +320,24 @@ static __shell_cmd struct shell_cmd cmd_hexdump = {
 	.exe		= "hexdump",
 	.handler	= do_hexdump,
 	.usage          = "hexdump address size",
+};
+
+static int do_uname(int argc, char *argv[])
+{
+	struct utsname name;
+
+	(void)argc;
+	(void)argv;
+	uname(&name);
+	printf("%s %s %s %s %s\n", name.sysname, name.nodename, name.release,
+	       name.version, name.machine);
+
+	return 0;
+}
+
+static __shell_cmd struct shell_cmd cmd_uname = {
+	.exe		= "uname",
+	.handler	= do_uname,
 };
 
 static void *shell(void *args)
