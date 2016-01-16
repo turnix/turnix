@@ -33,4 +33,8 @@
 
 #define LINE_MAX CONFIG_LINE_MAX
 
+#define ULONG_MAX 0xffffffffUL
+#define LONG_MAX  0x7fffffffL
+#define LONG_MIN (-LONG_MAX - 1)
+
 #endif  /* LIMITS_H */
