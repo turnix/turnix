@@ -25,11 +25,26 @@
 #ifndef STDLIB_H
 #define STDLIB_H
 
+#include <stddef.h>
+
 static inline int abs(int v)
 {
 	return v >= 0 ? v : -v;
 }
 
 void abort(void);
+
+long int strtol(const char *nptr, char **endptr, int base);
+unsigned long int strtoul(const char *nptr, char **endptr, int base);
+
+static inline long atol(const char *nptr)
+{
+	return strtol(nptr, NULL, 10);
+}
+
+static inline int atoi(const char *nptr)
+{
+	return atol(nptr);
+}
 
 #endif  /* STDLIB_H */

@@ -59,19 +59,25 @@ static void run_queue_init(void)
 	run_queue.bitmap = 0;
 }
 
-static void run_queue_enqueue(pthread_t thread)
+static void run_queue_enqueue(pthread_t thread, bool head)
 {
-	struct pthread_queue *q = &run_queue.level[thread->priority];
+	struct pthread_queue *q = &run_queue.level[thread->effective_priority];
 
 	if (TAILQ_EMPTY(q)) {
-		int i = SCHED_RR_PRIORITY_MAX - thread->priority;
+		int i = SCHED_RR_PRIORITY_MAX - thread->effective_priority;
 
 		run_queue.bitmap |= (1 << i);
 	}
 #if CONFIG_RR
 	thread->timeslice = CONFIG_TIMESLICE;
 #endif
-	TAILQ_INSERT_TAIL(&run_queue.level[thread->priority], thread, link);
+	if (head) {
+		TAILQ_INSERT_HEAD(&run_queue.level[thread->effective_priority],
+				  thread, link);
+	} else {
+		TAILQ_INSERT_TAIL(&run_queue.level[thread->effective_priority],
+				  thread, link);
+	}
 }
 
 static pthread_t run_queue_peek(void)
@@ -92,14 +98,55 @@ static pthread_t run_queue_peek(void)
 static void run_queue_dequeue(pthread_t thread)
 {
 	if (!TAILQ_ENTRY_EMPTY(&thread->link)) {
-		struct pthread_queue *q = &run_queue.level[thread->priority];
+		struct pthread_queue *q;
 
+		q = &run_queue.level[thread->effective_priority];
 		TAILQ_REMOVE(q, thread, link);
 		TAILQ_ENTRY_INIT(&thread->link);
 		if (TAILQ_EMPTY(q)) {
-			int i = SCHED_RR_PRIORITY_MAX - thread->priority;
+			int i;
 
+			i = SCHED_RR_PRIORITY_MAX - thread->effective_priority;
 			run_queue.bitmap &= ~(1 << i);
+		}
+	}
+}
+
+static void __pthread_setschedprio(pthread_t thread);
+
+static void __pthread_spread(pthread_t th)
+{
+	struct pthread_mutex *mutex;
+
+	for (;;) {
+		mutex = th->sleep_on;
+		if (!mutex)
+			break;
+		th = mutex->owner;
+		__pthread_setschedprio(th);
+	}
+}
+
+static void __pthread_setschedprio(pthread_t thread)
+{
+	struct pthread_mutex *mutex;
+	struct wait *w;
+	uint8_t prio = thread->priority;
+
+	TAILQ_FOREACH(mutex, &thread->mutex_queue, link) {
+		TAILQ_FOREACH(w, &mutex->wq, link) {
+			if (w->thread->effective_priority > prio)
+				prio = w->thread->effective_priority;
+		}
+	}
+	if (thread->effective_priority != prio) {
+		if (!TAILQ_ENTRY_EMPTY(&thread->link)) {
+			run_queue_dequeue(thread);
+			thread->effective_priority = prio;
+			run_queue_enqueue(thread, true);
+		} else {
+			thread->effective_priority = prio;
+			__pthread_spread(thread);
 		}
 	}
 }
@@ -110,13 +157,10 @@ int pthread_setschedprio(pthread_t thread, int priority)
 		unsigned long flags = interrupt_disable();
 
 		if (thread->priority != priority) {
-			if (!TAILQ_ENTRY_EMPTY(&thread->link)) {
-				run_queue_dequeue(thread);
-				thread->priority = priority;
-				run_queue_enqueue(thread);
+			thread->priority = priority;
+			if (thread->effective_priority != priority) {
+				__pthread_setschedprio(thread);
 				schedule();
-			} else {
-				thread->priority = priority;
 			}
 		}
 		interrupt_enable(flags);
@@ -140,6 +184,7 @@ void pthread_init(void)
 	pthread_idle.stack_size = CONFIG_IDLE_STACK_SIZE;
 	TAILQ_ENTRY_INIT(&pthread_idle.link);
 	pthread_idle.priority = SCHED_RR_PRIORITY_IDLE;
+	pthread_idle.effective_priority = SCHED_RR_PRIORITY_IDLE;
 #if CONFIG_RR
 	pthread_idle.timeslice = CONFIG_TIMESLICE;
 #endif
@@ -149,7 +194,9 @@ void pthread_init(void)
 	pthread_idle.error_code = 0;
 	pthread_idle.stime.tv_sec = 0;
 	pthread_idle.stime.tv_usec = 0;
-	run_queue_enqueue(&pthread_idle);
+	run_queue_enqueue(&pthread_idle, false);
+	pthread_idle.sleep_on = NULL;
+	TAILQ_INIT(&pthread_idle.mutex_queue);
 }
 
 void __schedule(void)
@@ -159,7 +206,7 @@ void __schedule(void)
 #if CONFIG_RR
 	} else if (pthread_current->timeslice == 0) {
 		run_queue_dequeue(pthread_current);
-		run_queue_enqueue(pthread_current);
+		run_queue_enqueue(pthread_current, false);
 #endif
 	}
 
@@ -189,7 +236,7 @@ static void __pthread_set_running(pthread_t th)
 
 	th->state = PTHREAD_STATE_RUNNING;
 	if (TAILQ_ENTRY_EMPTY(&th->link))
-		run_queue_enqueue(th);
+		run_queue_enqueue(th, false);
 	interrupt_enable(flags);
 }
 
@@ -346,9 +393,12 @@ int pthread_create(pthread_t *thread, const pthread_attr_t *attr,
 	th->stack_size = attr->stack_size;
 	TAILQ_ENTRY_INIT(&th->link);
 	th->priority = attr->priority;
+	th->effective_priority = th->priority;
 #if CONFIG_RR
 	th->timeslice = CONFIG_TIMESLICE;
 #endif
+	th->sleep_on = NULL;
+	TAILQ_INIT(&th->mutex_queue);
 	th->flags = attr->flags;
 	strcpy(th->name, "unnamed");
 	th->waiter = NULL;
@@ -410,7 +460,9 @@ int pthread_mutex_init(pthread_mutex_t *mutex, const pthread_mutexattr_t *attr)
 {
 	mutex->lock = 1;
 	TAILQ_INIT(&mutex->wq);
-	(void)attr;
+	mutex->type = attr->type;
+	mutex->owner = NULL;
+	mutex->recursive_count = 0;
 
 	return 0;
 }
@@ -426,28 +478,44 @@ int pthread_mutex_destroy(pthread_mutex_t *mutex)
 int pthread_mutex_lock(pthread_mutex_t *mutex)
 {
 	unsigned long flags;
-	struct wait w;
 
 	assert(!in_irq);
 
-	if (atomic_sub_return(1, &mutex->lock) == 0)
-		return 0;
 	flags = interrupt_disable();
-	w.thread = pthread_self();
-	TAILQ_INSERT_TAIL(&mutex->wq, &w, link);
-	for (;;) {
-		if (mutex->lock == 1) {
-			mutex->lock = -1;
-			break;
-		} else {
-			mutex->lock = -1;
-		}
-		pthread_self()->state = PTHREAD_STATE_SLEEPING;
-		schedule();
-	}
-	TAILQ_REMOVE(&mutex->wq, &w, link);
-	if (TAILQ_EMPTY(&mutex->wq))
+	if (mutex->lock == 1) {
 		mutex->lock = 0;
+		TAILQ_INSERT_TAIL(&pthread_current->mutex_queue, mutex, link);
+		mutex->owner = pthread_current;
+		mutex->recursive_count = 1;
+	} else if (mutex->type == PTHREAD_MUTEX_RECURSIVE_NP &&
+		   mutex->owner == pthread_current) {
+		mutex->recursive_count++;
+	} else {
+		struct wait w;
+
+		w.thread = pthread_self();
+		TAILQ_INSERT_TAIL(&mutex->wq, &w, link);
+		pthread_current->sleep_on = mutex;
+		__pthread_spread(pthread_current);
+		for (;;) {
+			if (mutex->lock == 1) {
+				mutex->lock = -1;
+				break;
+			} else {
+				mutex->lock = -1;
+			}
+			pthread_self()->state = PTHREAD_STATE_SLEEPING;
+			schedule();
+		}
+		pthread_current->sleep_on = NULL;
+		TAILQ_REMOVE(&mutex->wq, &w, link);
+		if (TAILQ_EMPTY(&mutex->wq))
+			mutex->lock = 0;
+		TAILQ_INSERT_TAIL(&pthread_current->mutex_queue, mutex, link);
+		mutex->owner = pthread_current;
+		mutex->recursive_count = 1;
+		__pthread_setschedprio(pthread_current);
+	}
 	interrupt_enable(flags);
 
 	return 0;
@@ -455,24 +523,50 @@ int pthread_mutex_lock(pthread_mutex_t *mutex)
 
 int pthread_mutex_trylock(pthread_mutex_t *mutex)
 {
-	if (atomic_sub_return(1, &mutex->lock) == 0)
-		return 0;
+	int retval = 0;
+	unsigned long flags = interrupt_disable();
 
-	return EBUSY;
+	if (mutex->lock == 1) {
+		mutex->lock = 0;
+		TAILQ_INSERT_TAIL(&pthread_current->mutex_queue, mutex, link);
+		mutex->owner = pthread_current;
+		mutex->recursive_count = 1;
+	} else if (mutex->type == PTHREAD_MUTEX_RECURSIVE_NP &&
+		   mutex->owner == pthread_current) {
+		mutex->recursive_count++;
+	} else {
+		retval = EBUSY;
+	}
+	interrupt_enable(flags);
+
+	return retval;
 }
 
 int pthread_mutex_unlock(pthread_mutex_t *mutex)
 {
-	unsigned long flags;
-	struct wait *w;
+	unsigned long flags = interrupt_disable();
 
-	if (atomic_add_return(1, &mutex->lock) == 1)
-		return 0;
-	flags = interrupt_disable();
-	mutex->lock = 1;
-	w = TAILQ_FIRST(&mutex->wq);
-	if (w)
-		wake_up(w->thread);
+	if (--mutex->recursive_count == 0) {
+		struct pthread *target = NULL;
+
+		TAILQ_REMOVE(&pthread_current->mutex_queue, mutex, link);
+		mutex->owner = NULL;
+		if (mutex->lock != 0) {
+			struct wait *w;
+
+			TAILQ_FOREACH(w, &mutex->wq, link) {
+				if (!target ||
+				    target->effective_priority < w->thread->effective_priority) {
+					target = w->thread;
+				}
+			}
+		}
+		mutex->lock = 1;
+		__pthread_setschedprio(pthread_current);
+		if (target)
+			__pthread_set_running(target);
+		schedule();
+	}
 	interrupt_enable(flags);
 
 	return 0;
@@ -496,14 +590,19 @@ int pthread_cond_destroy(pthread_cond_t *cond)
 int pthread_cond_signal(pthread_cond_t *cond)
 {
 	unsigned long flags;
-	struct wait *w;
+	struct wait *w, *target = NULL;
 
 	flags = interrupt_disable();
-	w = TAILQ_FIRST(&cond->wq);
-	if (w) {
-		TAILQ_REMOVE(&cond->wq, w, link);
-		TAILQ_ENTRY_INIT(&w->link);
-		wake_up(w->thread);
+	TAILQ_FOREACH(w, &cond->wq, link) {
+		if (!target ||
+		    target->thread->effective_priority < w->thread->effective_priority) {
+			target = w;
+		}
+	}
+	if (target) {
+		TAILQ_REMOVE(&cond->wq, target, link);
+		TAILQ_ENTRY_INIT(&target->link);
+		wake_up(target->thread);
 	}
 	interrupt_enable(flags);
 

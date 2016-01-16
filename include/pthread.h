@@ -143,14 +143,20 @@ int pthread_getname_np(pthread_t thread, char *buf, size_t size);
 
 int pthread_setname_np(pthread_t thread, const char *name);
 
+enum {
+	PTHREAD_MUTEX_FAST_NP,
+	PTHREAD_MUTEX_RECURSIVE_NP
+};
+
 struct pthread_mutexattr {
+	int type;
 };
 
 typedef struct pthread_mutexattr pthread_mutexattr_t;
 
 static inline int pthread_mutexattr_init(pthread_mutexattr_t *attr)
 {
-	(void)attr;
+	attr->type = PTHREAD_MUTEX_FAST_NP;
 
 	return 0;
 }
@@ -162,9 +168,29 @@ static inline int pthread_mutexattr_destroy(pthread_mutexattr_t *attr)
 	return 0;
 }
 
+static inline int pthread_mutexattr_settype(pthread_mutexattr_t *attr, int kind)
+{
+	attr->type = kind;
+
+	return 0;
+}
+
+static inline int pthread_mutexattr_gettype(pthread_mutexattr_t *attr,
+					    int *kind)
+{
+	if (attr && kind)
+		*kind = attr->type;
+
+	return 0;
+}
+
 struct pthread_mutex {
-	volatile int		lock;
-	struct wait_queue	wq;
+	volatile int			lock;
+	struct wait_queue		wq;
+	int				type;
+	pthread_t			owner;
+	int				recursive_count;
+	TAILQ_ENTRY(, pthread_mutex)	link;
 };
 
 typedef struct pthread_mutex pthread_mutex_t;

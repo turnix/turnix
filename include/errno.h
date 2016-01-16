@@ -55,22 +55,29 @@ enum {
 	PTHREAD_NAME_SIZE = 16
 };
 
+struct pthread_mutex;
+
+TAILQ_HEAD(pthread_mutex_queue, pthread_mutex);
+
 struct pthread {
-	struct arch_context	context;
-	enum pthread_state	state;
-	void			*retval;
-	void			*stack_addr;
-	size_t			stack_size;
-	TAILQ_ENTRY(, pthread)	link;
-	uint8_t			priority;
+	struct arch_context		context;
+	enum pthread_state		state;
+	void				*retval;
+	void				*stack_addr;
+	size_t				stack_size;
+	TAILQ_ENTRY(, pthread)		link;
+	uint8_t				effective_priority;
+	uint8_t				priority;
 #if CONFIG_RR
-	uint8_t			timeslice;
+	uint8_t				timeslice;
 #endif
-	uint8_t			flags;
-	char			name[PTHREAD_NAME_SIZE];
-	struct pthread		*waiter;
-	int			error_code;
-	struct timeval		stime;
+	uint8_t				flags;
+	char				name[PTHREAD_NAME_SIZE];
+	struct pthread			*waiter;
+	int				error_code;
+	struct timeval			stime;
+	struct pthread_mutex		*sleep_on;
+	struct pthread_mutex_queue	mutex_queue;
 };
 
 extern struct pthread *pthread_current;

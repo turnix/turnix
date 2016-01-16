@@ -31,6 +31,7 @@
 #include <pthread.h>
 #include <shell.h>
 #include <timer.h>
+#include <hexdump.h>
 
 #include <readline/readline.h>
 
@@ -297,6 +298,24 @@ static int do_ps(int argc, char *argv[]) {
 static __shell_cmd struct shell_cmd cmd_ps = {
 	.exe		= "ps",
 	.handler	= do_ps,
+};
+
+static int do_hexdump(int argc, char *argv[]) {
+	if (argc != 3) {
+		printf("invalid arguments\n");
+		return -1;
+	}
+	void *address = (void *)strtoul(argv[1], NULL, 0);
+	size_t size = strtoul(argv[2], NULL, 0);
+	hexdump(address, size);
+
+	return 0;
+}
+
+static __shell_cmd struct shell_cmd cmd_hexdump = {
+	.exe		= "hexdump",
+	.handler	= do_hexdump,
+	.usage          = "hexdump address size",
 };
 
 static void *shell(void *args)
