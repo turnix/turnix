@@ -2,7 +2,13 @@ KERNEL := turnix
 CFLAGS += -Wall -Werror -Wextra -O2 -nostdlib -nostdinc -fno-builtin \
 	  -fno-stack-protector -nostartfiles -nodefaultlibs -std=gnu99 \
 	  -Iinclude -ffreestanding
+KERNEL_RELEASE_VCS := $(shell git describe --dirty 2>/dev/null | sed -e 's/^[0-9.]*//')
+KERNEL_VERSION := $(shell date --iso-8601=seconds)
 ARCH ?= i386
+CFLAGS += -DKERNEL='"${KERNEL}"'
+CFLAGS += -DKERNEL_RELEASE_VCS='"${KERNEL_RELEASE_VCS}"'
+CFLAGS += -DKERNEL_VERSION='"${KERNEL_VERSION}"'
+CFLAGS += -DKERNEL_ARCH='"${ARCH}"'
 include arch/${ARCH}/Makefile
 LDFLAGS += -T ${LINK_SCRIPT}
 CC := ${CROSS_COMPILE}gcc
@@ -30,13 +36,14 @@ endif
 
 COBJS += kernel/main.o lib/string.o lib/stdio.o lib/stdlib.o \
 	 kernel/interrupt.o lib/hexdump.o kernel/timer.o lib/circular_buffer.o \
-	 kernel/pthread.o lib/readline.o ${APPLICATION} lib/time.o
+	 kernel/pthread.o lib/readline.o ${APPLICATION} lib/time.o \
+	 kernel/utsname.o
 DEPS = $(COBJS:.o=.d)
 OBJS = ${ASMOBJS} ${COBJS}
 
 .DELETE_ON_ERROR:
 
-.PHONY: all qemu dump gdb loc clean arch-clean cscope tags size strip
+.PHONY: all qemu dump gdb loc clean arch-clean cscope tags size strip .FORCE
 
 all: ${OUTPUT}
 
@@ -58,6 +65,8 @@ ${KERNEL}.elf: ${OBJS} ${LINK_SCRIPT}
 	$(CC) -M $< ${CFLAGS} | \
 		sed -e 's;^\(.*\)\.o\(.*\);$(@D)/\1.o $(@D)/\1.d\2;' > $@
 
+kernel/utsname.o: .FORCE
+
 include/config.h: Config.mk
 	$(shell echo "/* DO NOT EDIT IT */" >$@)
 	$(shell echo "#ifndef CONFIG_H" >>$@)
@@ -67,7 +76,7 @@ include/config.h: Config.mk
 
 -include $(DEPS)
 
-qemu: ${KERNEL}.elf
+qemu:
 	$(QEMU) -m 16M -kernel ${KERNEL}.elf
 
 dump: ${KERNEL}.elf

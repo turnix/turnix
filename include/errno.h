@@ -41,6 +41,7 @@ enum {
 	EDEADLK,
 	ESRCH,
 	ETIMEDOUT,
+	EFAULT,
 };
 
 enum pthread_state {
